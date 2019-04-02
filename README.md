@@ -17,7 +17,7 @@ Project of parallel computation of Matrix multiplication. This was part of the c
 
 ## Main tasks
 
-* Write a serial algorithm
+* Write a serial algorithm (Usual cache oblivious implementation and Strassen algorithm)
 * Write the parallel algorithm with MPI
 * Compute the theoretical complexity of our algorithm
 * Time the computation by taking into account the broadcast/gathering parts and without.
