@@ -17,7 +17,7 @@ Project of parallel computation of Matrix multiplication. This was part of the c
 
 ## Main tasks
 
-* Write a serial algorithm
+* Write a serial algorithm (Usual cache oblivious implementation and Strassen algorithm)
 * Write the parallel algorithm with MPI
 * Compute the theoretical complexity of our algorithm
 * Time the computation by taking into account the broadcast/gathering parts and without.
@@ -33,3 +33,11 @@ The last approach we thought of was:
 * If we multiply A and B we can have different heights for the partitions of A and different wiwth for the patrtition of B. However P should divide the #column of A and Q should divide #row of B.
 
 NB: We should check to what extend this solution works. Can we always find a P and Q that works? Will the final partition be clever?
+
+So first do a padding to square matrices and use square number of processors that divide N. We should refuse non square number of processors.
+
+Then the other method: We have PxP processors, A (NxK) and B(KxM). We need P dividing K. Either it's already the case or we add the number needed of cols for A and rows forr B padded wioth 0s.
+
+
+
+
