@@ -40,6 +40,9 @@ void print_matrix_from(double **A, int ii, int jj, int N, int M) {
 }
 
 void add(double **A, double **B, double **C, int l, int ia, int ja, int Na, int Ma, int ib, int jb, int Nb, int Mb, int ic, int jc, int *Nc, int *Mc) {
+    // if(l>0) {
+    //     printf("[LOG] add (l:%d, ia:%d, ja:%d, Na:%d, Ma:%d, ib:%d, jb:%d, Nb:%d, Mb:%d, ic:%d, jc:%d)\n", l, ia, ja, Na, Ma, ib, jb, Nb, Mb, ic, jc);
+    // }
 
     if ((Na <= ia && Nb <= ib) || (Ma <= ja && Mb <= jb)) {
         *Nc = 0;
@@ -54,10 +57,18 @@ void add(double **A, double **B, double **C, int l, int ia, int ja, int Na, int 
     int Mmin = min(l, max(min(Ma - ja, Mb - jb), 0));
     int Nmax = min(l, max(max(Na - ia, Nb - ib), 0));
     int Mmax = min(l, max(max(Ma - ja, Mb - jb), 0));
-
+    // if(l>0) {
+    //     printf("[LOG] add (Nmin:%d, Mmin:%d, Nmax:%d, Mmax:%d)\n", Nmin, Mmin, Nmax, Mmax);
+    // }
 
     *Nc = ic + Nmax;
     *Mc = jc + Mmax;
+
+    // // Init the result matrix
+    // double **C = (double **) malloc(Nmax * sizeof(double *));
+    // for(int i = 0; i < Nmax; i++) {
+    //     C[i] = (double *) malloc(Mmax * sizeof(double));
+    // }
 
     for (int i = 0; i < Nmin; i++) {
         for(int j = 0; j < Mmin; j++) {
@@ -97,9 +108,14 @@ void add(double **A, double **B, double **C, int l, int ia, int ja, int Na, int 
             }
         }
     }
+    // print_matrix(C, *Nc, *Mc);
+
 }
 
 void sub(double **A, double **B, double **C, int l, int ia, int ja, int Na, int Ma, int ib, int jb, int Nb, int Mb, int ic, int jc, int *Nc, int *Mc) {
+    // if(l>0) {
+    //     printf("[LOG] sub (l:%d, ia:%d, ja:%d, Na:%d, Ma:%d, ib:%d, jb:%d, Nb:%d, Mb:%d, ic:%d, jc:%d)\n", l, ia, ja, Na, Ma, ib, jb, Nb, Mb, ic, jc);
+    // }
 
     if ((Na <= ia && Nb <= ib) || (Ma <= ja && Mb <= jb)) {
         *Nc = 0;
@@ -114,9 +130,18 @@ void sub(double **A, double **B, double **C, int l, int ia, int ja, int Na, int 
     int Mmin = min(l, max(min(Ma - ja, Mb - jb), 0));
     int Nmax = min(l, max(max(Na - ia, Nb - ib), 0));
     int Mmax = min(l, max(max(Ma - ja, Mb - jb), 0));
+    // if(l>0) {
+    //     printf("[LOG] sub (Nmin:%d, Mmin:%d, Nmax:%d, Mmax:%d)\n", Nmin, Mmin, Nmax, Mmax);
+    // }
 
     *Nc = ic + Nmax;
     *Mc = jc + Mmax;
+
+    // // Init the result matrix
+    // double **C = (double **) malloc(Nmax * sizeof(double *));
+    // for(int i = 0; i < Nmax; i++) {
+    //     C[i] = (double *) malloc(Mmax * sizeof(double));
+    // }
 
     for (int i = 0; i < Nmin; i++) {
         for(int j = 0; j < Mmin; j++) {
@@ -156,11 +181,20 @@ void sub(double **A, double **B, double **C, int l, int ia, int ja, int Na, int 
             }
         }
     }
+    // print_matrix(C, *Nc, *Mc);
+
 }
 
 
 
 double ** Strassen(double **A, double **B, int d, int ia, int ja, int Na, int Ma, int ib, int jb, int Nb, int Mb, int *Nc, int *Mc) {
+    if (d>1) {
+        printf("[LOG] Strassen (d:%d, ia:%d, ja:%d, Na:%d, Ma:%d, ib:%d, jb:%d, Nb:%d, Mb:%d)\n", d, ia, ja, Na, Ma, ib, jb, Nb, Mb);
+        printf("A:\n");
+        print_matrix_from(A, ia, ja, Na, Ma);
+        printf("B:\n");
+        print_matrix_from(B, ib, jb, Nb, Mb);
+    }
     if (Na <= ia || Nb <= ib || Ma <= ja || Mb <= jb) {
         *Nc = 0;
         *Mc = 0;
@@ -246,6 +280,24 @@ double ** Strassen(double **A, double **B, int d, int ia, int ja, int Na, int Ma
         C[i] = (double *) malloc(*Mc * sizeof(double));
     }
 
+    // if (d>-1) {
+    //     printf("m1\n");
+    //     print_matrix(m1, Nm1, Mm1);
+    //     printf("m2\n");
+    //     print_matrix(m2, Nm2, Mm2);
+    //     printf("m3\n");
+    //     print_matrix(m3, Nm3, Mm3);
+    //     printf("m4\n");
+    //     print_matrix(m4, Nm4, Mm4);
+    //     printf("m5\n");
+    //     print_matrix(m5, Nm5, Mm5);
+    //     printf("m6\n");
+    //     print_matrix(m6, Nm6, Mm6);
+    //     printf("m7\n");
+    //     print_matrix(m7, Nm7, Mm7);
+    // }
+    //
+    // print_matrix(C, *Nc, *Mc);
 
     //C11
     add(m1, m4, C, l, 0, 0, Nm1, Mm1, 0, 0, Nm4, Mm4, 0, 0, &N1, &M1);
@@ -272,12 +324,17 @@ double ** Strassen(double **A, double **B, int d, int ia, int ja, int Na, int Ma
     free_matrix(m6, Nm6);
     free_matrix(m7, Nm7);
 
+
+    if (d>1) {
+        printf("C:\n");
+        print_matrix(C, *Nc, *Mc);
+    }
     return C;
 }
 
 int main(int argc, char **argv)
 {
-    const int N = 256;
+    const int N = 9;
 
     // Initialization of the matrices
     double **A = (double **) malloc(N * sizeof(double *));
@@ -288,8 +345,8 @@ int main(int argc, char **argv)
         B[i] = (double *) malloc(N * sizeof(double));
         C[i] = (double *) malloc(N * sizeof(double));
         for(int j = 0; j < N; j++) {
-            A[i][j] = 1;
             B[i][j] = 1;
+            A[i][j] = 1;
         }
     }
 
