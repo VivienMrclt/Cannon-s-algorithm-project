@@ -30,15 +30,6 @@ void print_matrix(char **A, int N, int M) {
     }
 }
 
-void print_matrix_from(char **A, int ii, int jj, int N, int M) {
-    for(int i = ii; i < N; i++) {
-        for(int j = jj; j < M; j++) {
-            printf("%d ", (int) A[i][j]);
-        }
-        printf("\n");
-    }
-}
-
 void add(char **C, int l, char **A, int ia, int ja, char **B, int ib, int jb) {
     for(int i = 0; i < l; i++) {
         for(int j = 0; j < l; j++) {
@@ -192,7 +183,6 @@ char ** Strassen(char **A, char **B, int N) {
 
     if (realocated) {
         // In the case that we redefined A and B we need to free them
-        printf("Realocated\n");
         free_matrix(A, 1 << (d+1));
         free_matrix(B, 1 << (d+1));
         char **tmp = (char **) malloc(N * sizeof(char *));
@@ -207,45 +197,4 @@ char ** Strassen(char **A, char **B, int N) {
     }
 
     return C;
-}
-
-
-int main(int argc, char **argv)
-{
-    if (argc == 2) {
-        int N = atoi(argv[1]);
-
-        // Initialization of the matrices
-        char **A = (char **) malloc(N * sizeof(char *));
-        char **B = (char **) malloc(N * sizeof(char *));
-        for(int i = 0; i < N; i++) {
-            A[i] = (char *) malloc(N * sizeof(char));
-            B[i] = (char *) malloc(N * sizeof(char));
-            for(int j = 0; j < N; j++) {
-                B[i][j] = 1;
-                A[i][j] = 1;
-            }
-        }
-        printf("Init done\n");
-
-        char **C = Strassen(A, B, N);
-
-        char target = N;
-        bool correct = true;
-        for(int i = 0; i < N; i++) {
-            for(int j = 0; j < N; j++) {
-                //printf("%d ", (int) C[i][j]);
-                if (C[i][j] != target) {
-                    correct = false;
-                }
-            }
-            //printf("\n");
-        }
-
-        printf("%s\n", correct ? "Success" : "Fail");
-
-        free_matrix(A, N);
-        free_matrix(B, N);
-        free_matrix(C, N);
-    }
 }
