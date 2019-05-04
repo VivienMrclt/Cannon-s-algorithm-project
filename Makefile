@@ -1,11 +1,11 @@
 CC=mpicc
 CFLAGS=-W -Wall -std=c99 -g
-LDFLAGS= -lm
-EXEC=serial cannon
+LDFLAGS= -lm -g
+EXEC=serial cannon cannon_init_transfer
 
 all: $(EXEC)
 
-%: obj/%.o obj/strassen.o
+%: obj/%.o obj/strassen.o obj/load_matrix.o
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 obj/%.o: src/%.c
