@@ -174,7 +174,7 @@ char ** Strassen(char **A, char **B, int N) {
         }
         B = tmp;
         realocated = true;
-        printf("Realocation done\n");
+        //printf("Realocation done\n");
     } else {
         d = d - 1;
     }
