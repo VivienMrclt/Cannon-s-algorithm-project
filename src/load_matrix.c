@@ -1,6 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+double fRand()
+{
+    return (double)rand() / RAND_MAX;
+}
+
 double *load_A(char * file_name, int *N, int *K) {
     int M;
     FILE *file = fopen(file_name, "r");
@@ -192,6 +197,79 @@ double *load_C_subpart(char * file_name, int *Npr, int *Mpr, int ip, int jp, int
         return C;
     }
     return NULL;
+}
+
+
+double *load_A_subpart_1(int N, int K, int *Np, int *Kp, int ip, int jp, int P) {
+    *Np = N / P + (N % P == 0 ? 0 : 1);
+    *Kp = K / P + (K % P == 0 ? 0 : 1);
+
+    int Npr = (ip == P - 1 && N % *Np != 0) ? N % *Np : *Np;
+    int Kpr = (jp == P - 1 && K % *Kp != 0) ? K % *Kp : *Kp;
+
+    double *A = (double *) calloc(*Np * *Kp, sizeof(double));
+
+    for (int i = 0; i < Npr; i++) {
+        for (int j = 0; j < Kpr; j++) {
+            A[i * *Kp + j] = 1;
+        }
+    }
+
+    return A;
+}
+
+double *load_B_subpart_1(int K, int M, int *Kp, int *Mp, int ip, int jp, int P) {
+    *Kp = K / P + (K % P == 0 ? 0 : 1);
+    *Mp = M / P + (M % P == 0 ? 0 : 1);
+
+    int Kpr = (ip == P - 1 && K % *Kp != 0) ? K % *Kp : *Kp;
+    int Mpr = (jp == P - 1 && M % *Mp != 0) ? M % *Mp : *Mp;
+
+    double *B = (double *) calloc(*Kp * *Mp, sizeof(double));
+
+    for (int i = 0; i < Kpr; i++) {
+        for (int j = 0; j < Mpr; j++) {
+            B[i * *Mp + j] = 1;
+        }
+    }
+
+    return B;
+}
+
+double *load_A_subpart_rand(int N, int K, int *Np, int *Kp, int ip, int jp, int P) {
+    *Np = N / P + (N % P == 0 ? 0 : 1);
+    *Kp = K / P + (K % P == 0 ? 0 : 1);
+
+    int Npr = (ip == P - 1 && N % *Np != 0) ? N % *Np : *Np;
+    int Kpr = (jp == P - 1 && K % *Kp != 0) ? K % *Kp : *Kp;
+
+    double *A = (double *) calloc(*Np * *Kp, sizeof(double));
+
+    for (int i = 0; i < Npr; i++) {
+        for (int j = 0; j < Kpr; j++) {
+            A[i * *Kp + j] = fRand();
+        }
+    }
+
+    return A;
+}
+
+double *load_B_subpart_rand(int K, int M, int *Kp, int *Mp, int ip, int jp, int P) {
+    *Kp = K / P + (K % P == 0 ? 0 : 1);
+    *Mp = M / P + (M % P == 0 ? 0 : 1);
+
+    int Kpr = (ip == P - 1 && K % *Kp != 0) ? K % *Kp : *Kp;
+    int Mpr = (jp == P - 1 && M % *Mp != 0) ? M % *Mp : *Mp;
+
+    double *B = (double *) calloc(*Kp * *Mp, sizeof(double));
+
+    for (int i = 0; i < Kpr; i++) {
+        for (int j = 0; j < Mpr; j++) {
+            B[i * *Mp + j] = fRand();
+        }
+    }
+
+    return B;
 }
 
 // int main(int argc, char **argv)

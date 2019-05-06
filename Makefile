@@ -1,11 +1,19 @@
-CC=mpicc
+CC=mpicc #mpicc
+
 CFLAGS=-W -Wall -std=c99 -g
 LDFLAGS= -lm -g
-EXEC=serial cannon cannon_init_transfer
+OPT=-O3 #-mkl
+
+PDC_PARAM=-o GSSAPIDelegateCredentials=yes -o GSSAPIKeyExchange=yes -o GSSAPIAuthentication=yes
+EXEC=serial cannon
+EXEC_MKL=cannon_mkl
+PDC_ID=marcault
 
 all: $(EXEC)
 
-%: obj/%.o obj/strassen.o obj/load_matrix.o
+mkl: obj/load_matrix.o $(EXEC_MKL)
+
+%: obj/%.o obj/strassen.o obj/load_matrix.o obj/utils.o
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 obj/%.o: src/%.c
@@ -17,4 +25,12 @@ clean:
 	rm -rf obj/*.o
 
 mrproper: clean
-	rm -rf $(EXEC)
+	rm -rf $(EXEC) $(EXEC_MKL)
+
+sendPDC:
+	scp $(PDC_PARAM) src/* $(PDC_ID)@tegner.pdc.kth.se:~/Private/cannon/src
+	scp $(PDC_PARAM) Makefile $(PDC_ID)@tegner.pdc.kth.se:~/Private/cannon/
+	scp $(PDC_PARAM) job.sh $(PDC_ID)@tegner.pdc.kth.se:~/Private/cannon/
+
+connectPDC:
+	ssh $(PDC_PARAM) $(PDC_ID)@tegner.pdc.kth.se

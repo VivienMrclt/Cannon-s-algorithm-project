@@ -43,4 +43,12 @@ The bloc is returned as matrix stored line-wised and is NOT padded with zeros.
 */
 double *load_C_subpart(char * file_name, int *Npr, int *Mpr, int ip, int jp, int P);
 
+double *load_A_subpart_1(int N, int K, int *Np, int *Kp, int ip, int jp, int P);
+
+double *load_B_subpart_1(int K, int M, int *Kp, int *Mp, int ip, int jp, int P);
+
+double *load_A_subpart_rand(int N, int K, int *Np, int *Kp, int ip, int jp, int P);
+
+double *load_B_subpart_rand(int K, int M, int *Kp, int *Mp, int ip, int jp, int P);
+
 #endif
