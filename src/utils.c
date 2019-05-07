@@ -5,10 +5,52 @@
 #include <mpi.h>
 
 
+int size_bloc_alloc(int N, int P) {
+    return  N / P + (N % P == 0 ? 0 : 1);
+    // return (i == P - 1 && N % Np != 0) ? N % Np : Np;
+}
+
+int size_bloc(int i, int N, int P) {
+    // printf("SB: %d\n", N / P + (N % P > i ? 1 : 0));
+    return N / P + (N % P > i ? 1 : 0);
+    // int Np = N / P + (N % P == 0 ? 0 : 1);
+    // return (i == P - 1 && N % Np != 0) ? N % Np : Np;
+}
+
+int size_blocs_before(int i, int N, int P) {
+    // printf("SBB: %d\n", N / P * i + (N % P < i ? N % P : i));
+    return N / P * i + (N % P < i ? N % P : i);
+    // int Np = N / P + (N % P == 0 ? 0 : 1);
+    // return i * Np;
+}
 
 void verb_m_loaded(bool verbose, int i, int j) {
     if (verbose) {
         printf("Node(%d,%d): Matrice loaded\n", i, j);
+    }
+}
+
+void verb_sendA(bool verbose, int i1, int j1, int i2, int j2, int N, int K) {
+    if (verbose) {
+        printf("Node(%d,%d): Sends A to (%d,%d) of size(%d,%d)\n", i1, j1, i2, j2, N, K);
+    }
+}
+
+void verb_recvA(bool verbose, int i1, int j1, int i2, int j2, int N, int K) {
+    if (verbose) {
+        printf("Node(%d,%d): Recvs A fr (%d,%d) of size(%d,%d)\n", i1, j1, i2, j2, N, K);
+    }
+}
+
+void verb_recvB(bool verbose, int i1, int j1, int i2, int j2, int K, int M) {
+    if (verbose) {
+        printf("Node(%d,%d): Recvs B fr (%d,%d) of size(%d,%d)\n", i1, j1, i2, j2, K, M);
+    }
+}
+
+void verb_sendB(bool verbose, int i1, int j1, int i2, int j2, int K, int M) {
+    if (verbose) {
+        printf("Node(%d,%d): Sends B to (%d,%d) of size(%d,%d)\n", i1, j1, i2, j2, K, M);
     }
 }
 
@@ -31,21 +73,18 @@ void verb_sentC(bool verbose, int i1, int j1, int i2, int j2) {
 }
 
 void save_subpart(double *C, double *Cp, int N, int M, int ip, int jp, int P, bool padded) {
-    int Np = N / P + (N % P == 0 ? 0 : 1);
-    int Mp = M / P + (M % P == 0 ? 0 : 1);
+    int Np = size_bloc(ip, N, P);
+    int Mp = size_bloc(jp, M, P);
 
-    int Npr = (ip == P - 1 && N % Np != 0) ? N % Np : Np;
-    int Mpr = (jp == P - 1 && M % Mp != 0) ? M % Mp : Mp;
-
-    for (int i = 0; i < Npr; i++) {
-        for (int j = 0; j < Mpr; j++) {
-            C[(ip * Np + i) * M + jp * Mp + j] = Cp[i * (padded ? Mp : Mpr) + j];
+    for (int i = 0; i < Np; i++) {
+        for (int j = 0; j < Mp; j++) {
+            C[(size_blocs_before(ip, N, P) + i) * M + size_blocs_before(jp, M, P) + j] = Cp[i * Mp + j];
         }
     }
 
 }
 
-void parse_param (int argc, char **argv, int p, int P, bool *bd_gt, bool *timing, bool *verify, bool *verbose, bool *testfile, int *N, char **filename, int *rc) {
+void parse_param (int argc, char **argv, int p, int P, bool *bd_gt, bool *timing, bool *verify, bool *verbose, bool *testfile, int *N, int *K, int *M, char **filename, int *rc) {
     char *help =
 "Use:\n\
    mpirun -np #process ./cannon -s matrix_size [-bg]| -t filename [-T|-V|-v]\n\
@@ -65,9 +104,67 @@ Options:\n\
         while (i < argc) {
             if ((strcmp(argv[i],"-s") == 0) | (strcmp(argv[i],"--shape") == 0)) {
                 if (i + 1 < argc && !correct) {
-                    *N = atoi(argv[i+1]);
-                    i++;
-                    correct = true;
+                    int count=0;
+                    int index=0;
+                    while(argv[i+1][index] != '\0')
+                    {
+                        if(argv[i+1][index] == ',')
+                        {
+                            count++;
+                        }
+                        index++;
+                    }
+                    if (count == 0) {
+                        *N = atoi(argv[i+1]);
+                        *K = *N;
+                        *M = *N;
+                        i++;
+                        correct = true;
+                    } else if (count == 2) {
+                        char buffer[index];
+                        index = 0;
+                        int index_buffer = 0;
+                        while(argv[i+1][index] != '\0')
+                        {
+                            if(argv[i+1][index] == ',')
+                            {
+                                index++;
+                                index_buffer++;
+                                break;
+                            }
+                            buffer[index_buffer] = argv[i+1][index];
+                            index++;
+                            index_buffer++;
+                        }
+                        buffer[index_buffer] = '\0';
+                        *N = atoi(buffer);
+                        index_buffer = 0;
+                        while(argv[i+1][index] != '\0')
+                        {
+                            if(argv[i+1][index] == ',')
+                            {
+                                index++;
+                                index_buffer++;
+                                break;
+                            }
+                            buffer[index_buffer] = argv[i+1][index];
+                            index++;
+                            index_buffer++;
+                        }
+                        buffer[index_buffer] = '\0';
+                        *K = atoi(buffer);
+                        index_buffer = 0;
+                        while(argv[i+1][index] != '\0')
+                        {
+                            buffer[index_buffer] = argv[i+1][index];
+                            index++;
+                            index_buffer++;
+                        }
+                        buffer[index_buffer] = '\0';
+                        *M = atoi(buffer);
+                        i++;
+                        correct = true;
+                    }
                 } else {
                     correct = false;
                 }
@@ -124,18 +221,4 @@ Options:\n\
         *rc = MPI_Finalize();
         exit(0);
     }
-}
-
-int size_bloc(int i, int N, int P) {
-    printf("SB: %d\n", N / P + (N % P > i ? 1 : 0));
-    return N / P + (N % P > i ? 1 : 0);
-    // int Np = N / P + (N % P == 0 ? 0 : 1);
-    // return (i == P - 1 && N % Np != 0) ? N % Np : Np;
-}
-
-int size_blocs_before(int i, int N, int P) {
-    printf("SBB: %d\n", N / P * i + (N % P < i ? N % P : i));
-    return N / P * i + (N % P < i ? N % P : i);
-    // int Np = N / P + (N % P == 0 ? 0 : 1);
-    // return i * Np;
 }

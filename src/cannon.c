@@ -29,13 +29,14 @@ int main(int argc, char **argv)
     bool verbose = false;// Print the data transfers
     bool testfile = false; // Do we test from a file
     int N = 0;
+    int K = 0;
+    int M = 0;
     char *filename = "";
 
-    parse_param(argc, argv, p, P, &bd_gt, &timing, &verify, &verbose, &testfile, &N, &filename, &rc);
+    parse_param(argc, argv, p, P, &bd_gt, &timing, &verify, &verbose, &testfile, &N, &K, &M, &filename, &rc);
 
     // Compute the size of the grid PxP
     P = sqrt(P);
-
 
     int ip = p / P;
     int jp = p % P;
@@ -48,7 +49,7 @@ int main(int argc, char **argv)
     double *B_tmp;
     double *C_res;
     double *C;
-    int Np, Npr, Mpr;
+    int Np, Kp, Mp;// Npr, Mpr;
 
     if (bd_gt || (!testfile && verify)) {
         if (timing && bd_gt) {
@@ -62,9 +63,9 @@ int main(int argc, char **argv)
         //In the of broadcast/gather we need to send the matrices
         if (p==0) {
             if (verify) {
-                A_all = (double *) calloc(N * N, sizeof(double));
-                B_all = (double *) calloc(N * N, sizeof(double));
-                C_all = (double *) calloc(N * N, sizeof(double));
+                A_all = (double *) calloc(N * K, sizeof(double));
+                B_all = (double *) calloc(K * M, sizeof(double));
+                C_all = (double *) calloc(N * M, sizeof(double));
             }
 
             // We send the correct A and B matrices to all the other processes
@@ -72,47 +73,49 @@ int main(int argc, char **argv)
                 // Get the dest process's id
                 int idp = dp / P;
                 int jdp = dp % P;
-                int Ndp;
+                int Ndp, Kdp, Mdp;
 
                 // Load the correct A and send it
                 double *dA;
-                dA = load_A_subpart_rand(N, N, &Ndp, &Ndp, idp, (idp + jdp) % P, P);
+                dA = load_A_subpart_rand(N, K, &Ndp, &Kdp, idp, (idp + jdp) % P, P);
                 if (verify) {
-                    save_subpart(A_all, dA, N, N, idp, (idp + jdp) % P, P, true);
+                    save_subpart(A_all, dA, N, K, idp, (idp + jdp) % P, P, true);
                 }
 
-                rc = MPI_Send(dA, Ndp*Ndp, MPI_DOUBLE, dp, tag, MPI_COMM_WORLD);
+                rc = MPI_Send(dA, Ndp*Kdp, MPI_DOUBLE, dp, tag, MPI_COMM_WORLD);
                 verb_sentA(verbose, ip, jp, idp, jdp);
                 free(dA);
 
                 // Load the correct B and send it
                 double *dB;
-                dB = load_B_subpart_rand(N, N, &Ndp, &Ndp, (idp + jdp) % P, jdp, P);
+                dB = load_B_subpart_rand(K, M, &Kdp, &Mdp, (idp + jdp) % P, jdp, P);
                 if (verify) {
-                    save_subpart(B_all, dB, N, N, (idp + jdp) % P, jdp, P, true);
+                    save_subpart(B_all, dB, K, M, (idp + jdp) % P, jdp, P, true);
                 }
 
-                rc = MPI_Send(dB, Ndp*Ndp, MPI_DOUBLE, dp, tag, MPI_COMM_WORLD);
+                rc = MPI_Send(dB, Kdp*Mdp, MPI_DOUBLE, dp, tag, MPI_COMM_WORLD);
                 verb_sentB(verbose, ip, jp, idp, jdp);
                 free(dB);
             }
 
-            A = load_A_subpart_rand(N, N, &Np, &Np, 0, 0, P);
-            B = load_A_subpart_rand(N, N, &Np, &Np, 0, 0, P);
+            A = load_A_subpart_rand(N, K, &Np, &Kp, 0, 0, P);
+            B = load_A_subpart_rand(K, M, &Kp, &Mp, 0, 0, P);
             if (verify) {
-                save_subpart(A_all, A, N, N, ip, jp, P, true);
-                save_subpart(B_all, B, N, N, ip, jp, P, true);
+                save_subpart(A_all, A, N, K, ip, jp, P, true);
+                save_subpart(B_all, B, K, M, ip, jp, P, true);
             }
             verb_m_loaded(verbose, ip, jp);
 
         } else {
-            Np = N / P + (N % P == 0 ? 0 : 1);
+            Np = size_bloc(ip, N, P);
+            Kp = size_bloc((ip + jp) % P, K, P);
+            Mp = size_bloc(jp, M, P);
 
-            A = (double *) calloc(Np * Np, sizeof(double));
-            B = (double *) calloc(Np * Np, sizeof(double));
+            A = (double *) calloc(size_bloc_alloc(N, P) * size_bloc_alloc(K, P), sizeof(double));
+            B = (double *) calloc(size_bloc_alloc(K, P) * size_bloc_alloc(M, P), sizeof(double));
 
-            rc = MPI_Recv(A, Np*Np, MPI_DOUBLE, 0, tag, MPI_COMM_WORLD, &status);
-            rc = MPI_Recv(B, Np*Np, MPI_DOUBLE, 0, tag, MPI_COMM_WORLD, &status);
+            rc = MPI_Recv(A, Np*Kp, MPI_DOUBLE, 0, tag, MPI_COMM_WORLD, &status);
+            rc = MPI_Recv(B, Kp*Mp, MPI_DOUBLE, 0, tag, MPI_COMM_WORLD, &status);
         }
         if (timing && !bd_gt) {
             // Barrier for timing
@@ -123,12 +126,12 @@ int main(int argc, char **argv)
         }
     } else {
         if (testfile) {
-            A = load_A_subpart(filename, &Np, &Np, ip, (ip + jp) % P, P);
-            B = load_B_subpart(filename, &Np, &Np,(ip + jp) % P, jp, P);
-            C_res = load_C_subpart(filename, &Npr, &Mpr, ip, jp, P);
+            A = load_A_subpart(filename, &Np, &Kp, ip, (ip + jp) % P, P);
+            B = load_B_subpart(filename, &Kp, &Mp,(ip + jp) % P, jp, P);
+            C_res = load_C_subpart(filename, &Np, &Mp, ip, jp, P);
         } else {
-            A = load_A_subpart_rand(N, N, &Np, &Np, ip, (ip + jp) % P, P);
-            B = load_A_subpart_rand(N, N, &Np, &Np,(ip + jp) % P, jp, P);
+            A = load_A_subpart_rand(N, K, &Np, &Kp, ip, (ip + jp) % P, P);
+            B = load_A_subpart_rand(K, M, &Kp, &Mp,(ip + jp) % P, jp, P);
         }
         verb_m_loaded(verbose, ip, jp);
         if (timing) {
@@ -155,11 +158,9 @@ int main(int argc, char **argv)
     // }
 
 
-    A_tmp = (double *) calloc(Np * Np, sizeof(double));
-    B_tmp = (double *) calloc(Np * Np, sizeof(double));
-    Npr = (ip == P - 1 && N % Np != 0) ? N % Np : Np;
-    Mpr = (jp == P - 1 && N % Np != 0) ? N % Np : Np;
-    C = (double *) calloc(Npr * Mpr, sizeof(double));
+    A_tmp = (double *) calloc(size_bloc_alloc(N, P) * size_bloc_alloc(K, P), sizeof(double));
+    B_tmp = (double *) calloc(size_bloc_alloc(K, P) * size_bloc_alloc(M, P), sizeof(double));
+    C = (double *) calloc(Np * Mp, sizeof(double));
 
     // if(p==1) {
     //     for (int i = 0; i < Np*Np; i++) {
@@ -180,82 +181,99 @@ int main(int argc, char **argv)
         //     }
         // }
 
-        for (int i = 0; i < Npr; i++) {
-            for (int k = 0; k < Np; k++) {
-                for (int j = 0; j < Mpr; j++) {
-                    C[i * Mpr + j] += A[i * Np + k] * B[k * Np + j];
+        for (int i = 0; i < Np; i++) {
+            for (int k = 0; k < Kp; k++) {
+                for (int j = 0; j < Mp; j++) {
+                    C[i * Mp + j] += A[i * Kp + k] * B[k * Mp + j];
                 }
             }
         }
+        // TODO -> Correct matrix size for the data exchange
+
+        int Kp_next = size_bloc((ip + jp + P - c - 1) % P, K, P);
 
         if ( P % 2 == 0) { // With a grid of even size a simple chestboard exchange pattern is enough
             if ((ip + jp) % 2 == 0) {
-                rc = MPI_Send(A, Np*Np, MPI_DOUBLE, ip * P + (jp + 1) % P, tag, MPI_COMM_WORLD);
-                verb_sentA(verbose, ip, jp, ip, (jp + 1) % P);
-                rc = MPI_Send(B, Np*Np, MPI_DOUBLE, ((ip + 1) % P) * P + jp, tag, MPI_COMM_WORLD);
-                verb_sentB(verbose, ip, jp, (ip + 1) % P, jp);
-                rc = MPI_Recv(A_tmp, Np*Np, MPI_DOUBLE, ip * P + (jp + P - 1) % P, tag, MPI_COMM_WORLD, &status);
-                rc = MPI_Recv(B_tmp, Np*Np, MPI_DOUBLE, ((ip + P - 1) % P) * P + jp, tag, MPI_COMM_WORLD, &status);
+                verb_sendA(verbose, ip, jp, ip, (jp + 1) % P, Np, Kp);
+                rc = MPI_Send(A, Np * Kp, MPI_DOUBLE, ip * P + (jp + 1) % P, tag, MPI_COMM_WORLD);
+                //verb_sentA(verbose, ip, jp, ip, (jp + 1) % P);
+
+                verb_sendB(verbose, ip, jp, (ip + 1) % P, jp, Kp, Mp);
+                rc = MPI_Send(B, Kp * Mp, MPI_DOUBLE, ((ip + 1) % P) * P + jp, tag, MPI_COMM_WORLD);
+                //verb_sentB(verbose, ip, jp, (ip + 1) % P, jp);
+
+                verb_recvA(verbose, ip, jp, ip, (jp + P - 1) % P, Np, Kp_next);
+                rc = MPI_Recv(A_tmp, Np * Kp_next, MPI_DOUBLE, ip * P + (jp + P - 1) % P, tag, MPI_COMM_WORLD, &status);
+
+                verb_recvB(verbose, ip, jp, (ip + P - 1) % P, jp, Kp_next, Mp);
+                rc = MPI_Recv(B_tmp, Kp_next * Mp, MPI_DOUBLE, ((ip + P - 1) % P) * P + jp, tag, MPI_COMM_WORLD, &status);
             } else {
-                rc = MPI_Recv(A_tmp, Np*Np, MPI_DOUBLE, ip * P + (jp + P - 1) % P, tag, MPI_COMM_WORLD, &status);
-                rc = MPI_Recv(B_tmp, Np*Np, MPI_DOUBLE, ((ip + P - 1) % P) * P + jp, tag, MPI_COMM_WORLD, &status);
-                rc = MPI_Send(A, Np*Np, MPI_DOUBLE, ip * P + (jp + 1) % P, tag, MPI_COMM_WORLD);
-                verb_sentA(verbose, ip, jp, ip, (jp + 1) % P);
-                rc = MPI_Send(B, Np*Np, MPI_DOUBLE, ((ip + 1) % P) * P + jp, tag, MPI_COMM_WORLD);
-                verb_sentB(verbose, ip, jp, (ip + 1) % P, jp);
+                verb_recvA(verbose, ip, jp, ip, (jp + P - 1) % P, Np, Kp_next);
+                rc = MPI_Recv(A_tmp, Np * Kp_next, MPI_DOUBLE, ip * P + (jp + P - 1) % P, tag, MPI_COMM_WORLD, &status);
+
+                verb_recvB(verbose, ip, jp, (ip + P - 1) % P, jp, Kp_next, Mp);
+                rc = MPI_Recv(B_tmp, Kp_next * Mp, MPI_DOUBLE, ((ip + P - 1) % P) * P + jp, tag, MPI_COMM_WORLD, &status);
+
+                verb_sendA(verbose, ip, jp, ip, (jp + 1) % P, Np, Kp);
+                rc = MPI_Send(A, Np * Kp, MPI_DOUBLE, ip * P + (jp + 1) % P, tag, MPI_COMM_WORLD);
+                //verb_sentA(verbose, ip, jp, ip, (jp + 1) % P);
+
+                verb_sendB(verbose, ip, jp, (ip + 1) % P, jp, Kp, Mp);
+                rc = MPI_Send(B, Kp * Mp, MPI_DOUBLE, ((ip + 1) % P) * P + jp, tag, MPI_COMM_WORLD);
+                //verb_sentB(verbose, ip, jp, (ip + 1) % P, jp);
             }
         } else { // In the odd size case we need to deal with borders
             if ((ip + jp) % 2 == 0) {
                 if (jp != P - 1) {
                     // printf("(%d,%d) send A to (%d,%d)\n", ip, jp, ip, (jp + 1) % P);
-                    rc = MPI_Send(A, Np*Np, MPI_DOUBLE, ip * P + (jp + 1) % P, tag, MPI_COMM_WORLD);
+                    rc = MPI_Send(A, Np * Kp, MPI_DOUBLE, ip * P + (jp + 1) % P, tag, MPI_COMM_WORLD);
                     verb_sentA(verbose, ip, jp, ip, (jp + 1) % P);
                 }
                 if (ip != P - 1) {
-                    rc = MPI_Send(B, Np*Np, MPI_DOUBLE, ((ip + 1) % P) * P + jp, tag, MPI_COMM_WORLD);
+                    rc = MPI_Send(B, Kp * Mp, MPI_DOUBLE, ((ip + 1) % P) * P + jp, tag, MPI_COMM_WORLD);
                     verb_sentB(verbose, ip, jp, (ip + 1) % P, jp);
                 }
                 if (jp != 0) {
                     // printf("(%d,%d) recv A fr (%d,%d)\n", ip, jp, ip, (jp + P - 1) % P);
-                    rc = MPI_Recv(A_tmp, Np*Np, MPI_DOUBLE, ip * P + (jp + P - 1) % P, tag, MPI_COMM_WORLD, &status);
+                    rc = MPI_Recv(A_tmp, Np * Kp_next, MPI_DOUBLE, ip * P + (jp + P - 1) % P, tag, MPI_COMM_WORLD, &status);
                 }
                 if (ip != 0) {
-                    rc = MPI_Recv(B_tmp, Np*Np, MPI_DOUBLE, ((ip + P - 1) % P) * P + jp, tag, MPI_COMM_WORLD, &status);
+                    rc = MPI_Recv(B_tmp, Kp_next * Mp, MPI_DOUBLE, ((ip + P - 1) % P) * P + jp, tag, MPI_COMM_WORLD, &status);
                 }
             } else {
                 if (jp != 0) {
                     // printf("(%d,%d) recv A fr (%d,%d)\n", ip, jp, ip, (jp + P - 1) % P);
-                    rc = MPI_Recv(A_tmp, Np*Np, MPI_DOUBLE, ip * P + (jp + P - 1) % P, tag, MPI_COMM_WORLD, &status);
+                    rc = MPI_Recv(A_tmp, Np * Kp_next, MPI_DOUBLE, ip * P + (jp + P - 1) % P, tag, MPI_COMM_WORLD, &status);
                 }
                 if (ip != 0) {
-                    rc = MPI_Recv(B_tmp, Np*Np, MPI_DOUBLE, ((ip + P - 1) % P) * P + jp, tag, MPI_COMM_WORLD, &status);
+                    rc = MPI_Recv(B_tmp, Kp_next * Mp, MPI_DOUBLE, ((ip + P - 1) % P) * P + jp, tag, MPI_COMM_WORLD, &status);
                 }
                 if (jp != P - 1) {
                     // printf("(%d,%d) send A to (%d,%d)\n", ip, jp, ip, (jp + 1) % P);
-                    rc = MPI_Send(A, Np*Np, MPI_DOUBLE, ip * P + (jp + 1) % P, tag, MPI_COMM_WORLD);
+                    rc = MPI_Send(A, Np * Kp, MPI_DOUBLE, ip * P + (jp + 1) % P, tag, MPI_COMM_WORLD);
                     verb_sentA(verbose, ip, jp, ip, (jp + 1) % P);
                 }
                 if (ip != P - 1) {
-                    rc = MPI_Send(B, Np*Np, MPI_DOUBLE, ((ip + 1) % P) * P + jp, tag, MPI_COMM_WORLD);
+                    rc = MPI_Send(B, Kp * Mp, MPI_DOUBLE, ((ip + 1) % P) * P + jp, tag, MPI_COMM_WORLD);
                     verb_sentB(verbose, ip, jp, (ip + 1) % P, jp);
                 }
             }
 
             if (jp == P - 1) {
                 // printf("(%d,%d) send A to (%d,%d)\n", ip, jp, ip, 0);
-                rc = MPI_Send(A, Np*Np, MPI_DOUBLE, ip * P, tag, MPI_COMM_WORLD);
+                rc = MPI_Send(A, Np * Kp, MPI_DOUBLE, ip * P, tag, MPI_COMM_WORLD);
                 verb_sentA(verbose, ip, jp, ip, (jp + 1) % P);
             }
             if (ip == P - 1) {
-                rc = MPI_Send(B, Np*Np, MPI_DOUBLE, jp, tag, MPI_COMM_WORLD);
+                rc = MPI_Send(B, Kp * Mp, MPI_DOUBLE, jp, tag, MPI_COMM_WORLD);
                 verb_sentB(verbose, ip, jp, (ip + 1) % P, jp);
             }
             if (jp == 0) {
                 // printf("(%d,%d) recv A fr (%d,%d)\n", ip, jp, ip, P - 1);
-                rc = MPI_Recv(A_tmp, Np*Np, MPI_DOUBLE, ip * P + P - 1, tag, MPI_COMM_WORLD, &status);
+                rc = MPI_Recv(A_tmp, Np * Kp_next, MPI_DOUBLE, ip * P + P - 1, tag, MPI_COMM_WORLD, &status);
             }
             if (ip == 0) {
-                rc = MPI_Recv(B_tmp, Np*Np, MPI_DOUBLE, (P - 1) * P + jp, tag, MPI_COMM_WORLD, &status);
+                rc = MPI_Recv(B_tmp, Kp_next * Mp, MPI_DOUBLE, (P - 1) * P + jp, tag, MPI_COMM_WORLD, &status);
             }
         }
         double *tmp = A;
@@ -264,6 +282,7 @@ int main(int argc, char **argv)
         tmp = B;
         B = B_tmp;
         B_tmp = tmp;
+        Kp = Kp_next;
 
     }
 
@@ -283,29 +302,24 @@ int main(int argc, char **argv)
                 // Get the dest process's id
                 int idp = dp / P;
                 int jdp = dp % P;
-                int Ndp = N / P + (N % P == 0 ? 0 : 1);
-                int Ndpr = (idp == P - 1 && N % Ndp != 0) ? N % Ndp : Ndp;
-                int Mdpr = (jdp == P - 1 && N % Ndp != 0) ? N % Ndp : Ndp;
+                int Ndp = size_bloc(idp, N, P);
+                int Mdp = size_bloc(jdp, M, P);
 
-                double *dC = (double *) calloc(Ndpr * Mdpr, sizeof(double));
-                rc = MPI_Recv(dC, Ndpr * Mdpr, MPI_DOUBLE, dp, tag, MPI_COMM_WORLD, &status);
+                double *dC = (double *) calloc(Ndp * Mdp, sizeof(double));
+                rc = MPI_Recv(dC, Ndp * Mdp, MPI_DOUBLE, dp, tag, MPI_COMM_WORLD, &status);
 
                 if (verify) {
-                    save_subpart(C_all, dC, N, N, idp, jdp, P, false);
+                    save_subpart(C_all, dC, N, M, idp, jdp, P, false);
                 }
                 free(dC);
             }
             if (verify) {
-                save_subpart(C_all, C, N, N, ip, jp, P, false);
+                save_subpart(C_all, C, N, M, ip, jp, P, false);
             }
 
 
         } else {
-            int Np = N / P + (N % P == 0 ? 0 : 1);
-            int Npr = (ip == P - 1 && N % Np != 0) ? N % Np : Np;
-            int Mpr = (jp == P - 1 && N % Np != 0) ? N % Np : Np;
-
-            rc = MPI_Send(C, Npr*Mpr, MPI_DOUBLE, 0, tag, MPI_COMM_WORLD);
+            rc = MPI_Send(C, Np * Mp, MPI_DOUBLE, 0, tag, MPI_COMM_WORLD);
             verb_sentC(verbose, ip, jp, 0, 0);
         }
 
@@ -323,7 +337,7 @@ int main(int argc, char **argv)
     if (verify) {
         int correct = true;
         if (testfile) {
-            for (int i = 0; i < Npr * Mpr; i++) {
+            for (int i = 0; i < Np * Mp; i++) {
                 if (C[i] != C_res[i]) {
                     correct = false;
                     break;
@@ -332,13 +346,24 @@ int main(int argc, char **argv)
             printf("Node(%d,%d): %s\n", ip, jp, correct ? "Success" : "Fail");
         } else {
             if (p==0) {
+                // if(p==0) {
+                //     for (int i = 0; i < N * K; i++) {
+                //         printf("%lf \n", A_all[i]);
+                //     }
+                //     for (int i = 0; i < K * M; i++) {
+                //         printf("%lf \n", B_all[i]);
+                //     }
+                //     for (int i = 0; i < N * M; i++) {
+                //         printf("%lf \n", C_all[i]);
+                //     }
+                // }
                 for (int i = 0; i < N; i++) {
-                    for (int j = 0; j < N; j++) {
+                    for (int j = 0; j < M; j++) {
                         double c = 0;
-                        for (int k = 0; k < N; k++) {
-                            c += A_all[i * N + k] * B_all[k * N + j];
+                        for (int k = 0; k < K; k++) {
+                            c += A_all[i * K + k] * B_all[k * M + j];
                         }
-                        if(abs(C_all[i * N + j] - c) > 1e-15) {
+                        if(abs(C_all[i * M + j] - c) > 1e-15) {
                             correct = false;
                             break;
                         }
