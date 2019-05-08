@@ -3,6 +3,7 @@
 #include <math.h>
 #include <stdbool.h>
 #include <mpi.h>
+#include "load_matrix.h"
 
 
 int size_bloc_alloc(int N, int P) {
@@ -19,7 +20,11 @@ int size_bloc(int i, int N, int P) {
 
 int size_blocs_before(int i, int N, int P) {
     // printf("SBB: %d\n", N / P * i + (N % P < i ? N % P : i));
-    return N / P * i + (N % P < i ? N % P : i);
+    if (i >= P) {
+        return N;
+    } else {
+        return N / P * i + (N % P < i ? N % P : i);
+    }
     // int Np = N / P + (N % P == 0 ? 0 : 1);
     // return i * Np;
 }
@@ -90,7 +95,7 @@ void parse_param (int argc, char **argv, int p, int P, bool *bd_gt, bool *timing
    mpirun -np #process ./cannon -s matrix_size [-bg]| -t filename [-T|-V|-v]\n\
 \n\
 Options:\n\
-   -s, --shape               Specify the shape of the matrices A and B. Example: -s 5 means multiplication of two matrices of shape 5x5\n\
+   -s, --shape               Specify the shape of the matrices A and B. Example: -s 5 means multiplication of two matrices of shape 5x5. -s 3,5,6 means the multiplication of a matrix 3x5 and a matrix 5x6. These matrices are generated randomly\n\
    -t, --test                Specify what file to use for A and B. It should be followed by the path to the file. For more information on the test files format refer to README.txt\n\
    -h, --help                Display help\n\
    -bg, --broadcast-gather   Broadcast the matrices A and B from the process 0 to the others and gather the result at the end. This option can only be used with -s (not -t)\n\
@@ -172,6 +177,7 @@ Options:\n\
                 if (i + 1 < argc && !correct && !*bd_gt) {
                     *testfile = true;
                     *filename = argv[i+1];
+                    load_shape(*filename, N, K, M);
                     i++;
                     correct = true;
                 } else {
@@ -217,6 +223,15 @@ Options:\n\
     if(pow(sqrt(P), 2) != P) {
         if (p==0) {
             printf("You must provide a square number of processors\n");
+        }
+        *rc = MPI_Finalize();
+        exit(0);
+    }
+
+    int sqrtP = sqrt(P);
+    if(sqrtP > *N | sqrtP > *K | sqrtP > *M) {
+        if (p==0) {
+            printf("The number of processes PxP is too big for this shape of matrices\n");
         }
         *rc = MPI_Finalize();
         exit(0);

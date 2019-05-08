@@ -126,9 +126,9 @@ int main(int argc, char **argv)
         }
     } else {
         if (testfile) {
-            A = load_A_subpart(filename, &Np, &Kp, ip, (ip + jp) % P, P);
-            B = load_B_subpart(filename, &Kp, &Mp,(ip + jp) % P, jp, P);
-            C_res = load_C_subpart(filename, &Np, &Mp, ip, jp, P);
+            A = load_A_subpart(filename, &Np, &Kp, &N, &K, ip, (ip + jp) % P, P);
+            B = load_B_subpart(filename, &Kp, &Mp, &K, &M,(ip + jp) % P, jp, P);
+            C_res = load_C_subpart(filename, &Np, &Mp, &N, &M, ip, jp, P);
         } else {
             A = load_A_subpart_rand(N, K, &Np, &Kp, ip, (ip + jp) % P, P);
             B = load_A_subpart_rand(K, M, &Kp, &Mp,(ip + jp) % P, jp, P);
@@ -142,45 +142,12 @@ int main(int argc, char **argv)
             }
         }
     }
-    // if(p==2) {
-    //     printf("A:\n");
-    //     for (int i = 0; i < Np*Np; i++) {
-    //         printf("%lf, \n", A[i]);
-    //     }
-    //     printf("B:\n");
-    //     for (int i = 0; i < Np*Np; i++) {
-    //         printf("%lf, \n", B[i]);
-    //     }
-    //     printf("C_res:\n");
-    //     for (int i = 0; i < Npr*Npr; i++) {
-    //         printf("%lf, \n", C_res[i]);
-    //     }
-    // }
-
 
     A_tmp = (double *) calloc(size_bloc_alloc(N, P) * size_bloc_alloc(K, P), sizeof(double));
     B_tmp = (double *) calloc(size_bloc_alloc(K, P) * size_bloc_alloc(M, P), sizeof(double));
     C = (double *) calloc(Np * Mp, sizeof(double));
 
-    // if(p==1) {
-    //     for (int i = 0; i < Np*Np; i++) {
-    //         printf("%lf \n", A[i]);
-    //     }
-    //     for (int i = 0; i < Np*Np; i++) {
-    //         printf("%lf \n", B[i]);
-    //     }
-    //     // for (int i = 0; i < Npr*Mpr; i++) {
-    //     //     printf("%lf \n", C_res[i]);
-    //     // }
-    // }
-
     for (int c = 0; c < P; c++) {
-        // if(p==0) {
-        //     for (int i = 0; i < Np*Np; i++) {
-        //         printf("%lf, \n", A[i]);
-        //     }
-        // }
-
         for (int i = 0; i < Np; i++) {
             for (int k = 0; k < Kp; k++) {
                 for (int j = 0; j < Mp; j++) {
@@ -188,7 +155,7 @@ int main(int argc, char **argv)
                 }
             }
         }
-        // TODO -> Correct matrix size for the data exchange
+
 
         int Kp_next = size_bloc((ip + jp + P - c - 1) % P, K, P);
 
@@ -337,6 +304,20 @@ int main(int argc, char **argv)
     if (verify) {
         int correct = true;
         if (testfile) {
+            if(p==0) {
+                printf("A:\n");
+                for (int i = 0; i < Np * Kp; i++) {
+                    printf("%lf \n", A[i]);
+                }
+                printf("B:\n");
+                for (int i = 0; i < Kp * Mp; i++) {
+                    printf("%lf \n", B[i]);
+                }
+                printf("C:\n");
+                for (int i = 0; i < Np * Mp; i++) {
+                    printf("%lf \n", C[i]);
+                }
+            }
             for (int i = 0; i < Np * Mp; i++) {
                 if (C[i] != C_res[i]) {
                     correct = false;
@@ -346,17 +327,6 @@ int main(int argc, char **argv)
             printf("Node(%d,%d): %s\n", ip, jp, correct ? "Success" : "Fail");
         } else {
             if (p==0) {
-                // if(p==0) {
-                //     for (int i = 0; i < N * K; i++) {
-                //         printf("%lf \n", A_all[i]);
-                //     }
-                //     for (int i = 0; i < K * M; i++) {
-                //         printf("%lf \n", B_all[i]);
-                //     }
-                //     for (int i = 0; i < N * M; i++) {
-                //         printf("%lf \n", C_all[i]);
-                //     }
-                // }
                 for (int i = 0; i < N; i++) {
                     for (int j = 0; j < M; j++) {
                         double c = 0;
