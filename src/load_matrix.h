@@ -1,10 +1,6 @@
 #ifndef __LOAD_MATRIX__
 #define __LOAD_MATRIX__
 
-#include <stdio.h>
-#include <stdlib.h>
-
-
 void load_shape(char * file_name, int *N, int *K, int *M);
 
 /*
@@ -54,5 +50,7 @@ double *load_B_subpart_1(int K, int M, int *Kp, int *Mp, int ip, int jp, int P);
 double *load_A_subpart_rand(int N, int K, int *Np, int *Kp, int ip, int jp, int P);
 
 double *load_B_subpart_rand(int K, int M, int *Kp, int *Mp, int ip, int jp, int P);
+
+double *load_rand(int N, int M);
 
 #endif

@@ -1,20 +1,31 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
+#include "utils.h"
 #include "mkl.h"
 
-double fRand()
+double mkl_fRand()
 {
     return (double)rand() / RAND_MAX;
 }
 
-double *load_A(char * file_name, int *N, int *K) {
+void mkl_load_shape(char * file_name, int *N, int *K, int *M) {
+    FILE *file = fopen(file_name, "r");
+    if (file) {
+        fscanf(file, "%d", N);
+        fscanf(file, "%d", K);
+        fscanf(file, "%d", M);
+    }
+}
+
+double *mkl_load_A(char * file_name, int *N, int *K) {
     int M;
     FILE *file = fopen(file_name, "r");
     if (file) {
         fscanf(file, "%d", N);
         fscanf(file, "%d", K);
         fscanf(file, "%d", &M);
-        double * A = mkl_malloc(*N * *K * sizeof(double), 64);
+        double * A =  mkl_malloc(*N * *K * sizeof(double), 64);
         for (int i = 0; i < *N * *K; i++) {
             fscanf(file, "%lf", &A[i]);
         }
@@ -24,7 +35,7 @@ double *load_A(char * file_name, int *N, int *K) {
     return NULL;
 }
 
-double *load_B(char * file_name, int *K, int *M) {
+double *mkl_load_B(char * file_name, int *K, int *M) {
     int N;
     double jump;
     FILE *file = fopen(file_name, "r");
@@ -32,7 +43,7 @@ double *load_B(char * file_name, int *K, int *M) {
         fscanf(file, "%d", &N);
         fscanf(file, "%d", K);
         fscanf(file, "%d", M);
-        double * B = mkl_malloc(*K * *M * sizeof(double), 64);
+        double * B =  mkl_malloc(*K * *M * sizeof(double), 64);
         for (int i = 0; i < N * *K; i++) {
             fscanf(file, "%lf", &jump);
         }
@@ -45,7 +56,7 @@ double *load_B(char * file_name, int *K, int *M) {
     return NULL;
 }
 
-double *load_C(char * file_name, int *N, int *M) {
+double *mkl_load_C(char * file_name, int *N, int *M) {
     int K;
     double jump;
     FILE *file = fopen(file_name, "r");
@@ -53,7 +64,7 @@ double *load_C(char * file_name, int *N, int *M) {
         fscanf(file, "%d", N);
         fscanf(file, "%d", &K);
         fscanf(file, "%d", M);
-        double * C = mkl_malloc(*N * *M * sizeof(double), 64);
+        double * C =  mkl_malloc(*N * *M * sizeof(double), 64);
         for (int i = 0; i < *N * K; i++) {
             fscanf(file, "%lf", &jump);
         }
@@ -69,37 +80,34 @@ double *load_C(char * file_name, int *N, int *M) {
     return NULL;
 }
 
-double *load_A_subpart(char * file_name, int *Np, int *Kp, int ip, int jp, int P) {
-    int N, K, M;
+double *mkl_load_A_subpart(char * file_name, int *Np, int *Kp, int *N, int *K, int ip, int jp, int P) {
+    int M;
     double jump;
     FILE *file = fopen(file_name, "r");
     if (file) {
-        fscanf(file, "%d", &N);
-        fscanf(file, "%d", &K);
+        fscanf(file, "%d", N);
+        fscanf(file, "%d", K);
         fscanf(file, "%d", &M);
-        *Np = N / P + (N % P == 0 ? 0 : 1);
-        *Kp = K / P + (K % P == 0 ? 0 : 1);
+        *Np = size_bloc(ip, *N, P);
+        *Kp = size_bloc(jp, *K, P);
 
-        int Npr = (ip == P - 1 && N % *Np != 0) ? N % *Np : *Np;
-        int Kpr = (jp == P - 1 && K % *Kp != 0) ? K % *Kp : *Kp;
-
-        double * A = mkl_malloc(*Np * *Kp * sizeof(double), 64);
+        double * A =  mkl_malloc(size_bloc_alloc(*N, P) * size_bloc_alloc(*K, P) * sizeof(double), 64);
         // Go threw the lines before the bloc
-        for (int i = 0; i < ip * *Np * K; i++) {
+        for (int i = 0; i < size_blocs_before(ip, *N, P) * *K; i++) {
             fscanf(file, "%lf", &jump);
         }
-        for (int i = 0; i < Npr; i++) {
+        for (int i = 0; i < *Np; i++) {
             // Go threw the columns before the bloc on this line
-            for (int l = 0; l < jp * *Kp; l++) {
+            for (int l = 0; l < size_blocs_before(jp, *K, P); l++) {
                 fscanf(file, "%lf", &jump);
             }
             // Scanning the elements of the bloc on this line
-            for (int j = 0; j < Kpr; j++) {
+            for (int j = 0; j < *Kp; j++) {
                 //printf("(%d, %d) -> %d\n", i, j, i * *Kp + j);
                 fscanf(file, "%lf", &A[i * *Kp + j]);
             }
             // Go threw the columns after the bloc on this line
-            for (int l = (jp + 1) * *Kp; l < K; l++) {
+            for (int l = size_blocs_before(jp + 1, *K, P); l < *K; l++) {
                 fscanf(file, "%lf", &jump);
             }
         }
@@ -109,40 +117,38 @@ double *load_A_subpart(char * file_name, int *Np, int *Kp, int ip, int jp, int P
     return NULL;
 }
 
-double *load_B_subpart(char * file_name, int *Kp, int *Mp, int ip, int jp, int P) {
-    int N, K, M;
+double *mkl_load_B_subpart(char * file_name, int *Kp, int *Mp, int *K, int *M, int ip, int jp, int P) {
+    int N;
     double jump;
     FILE *file = fopen(file_name, "r");
     if (file) {
         fscanf(file, "%d", &N);
-        fscanf(file, "%d", &K);
-        fscanf(file, "%d", &M);
-        *Kp = K / P + (K % P == 0 ? 0 : 1);
-        *Mp = M / P + (M % P == 0 ? 0 : 1);
+        fscanf(file, "%d", K);
+        fscanf(file, "%d", M);
+        *Kp = size_bloc(ip, *K, P);
+        *Mp = size_bloc(jp, *M, P);
 
-        int Kpr = (ip == P - 1 && K % *Kp != 0) ? K % *Kp : *Kp;
-        int Mpr = (jp == P - 1 && M % *Mp != 0) ? M % *Mp : *Mp;
+        double * B =  mkl_malloc(size_bloc_alloc(*K, P) * size_bloc_alloc(*M, P) * sizeof(double), 64);
 
-        double * B = mkl_malloc(*Kp * *Mp * sizeof(double), 64);
         // Go threw A
-        for (int i = 0; i < N * K; i++) {
+        for (int i = 0; i < N * *K; i++) {
             fscanf(file, "%lf", &jump);
         }
         // Go threw the lines before the bloc
-        for (int i = 0; i < ip * *Kp * M; i++) {
+        for (int i = 0; i < size_blocs_before(ip, *K, P) * *M; i++) {
             fscanf(file, "%lf", &jump);
         }
-        for (int i = 0; i < Kpr; i++) {
+        for (int i = 0; i < *Kp; i++) {
             // Go threw the columns before the bloc on this line
-            for (int l = 0; l < jp * *Mp; l++) {
+            for (int l = 0; l < size_blocs_before(jp, *M, P); l++) {
                 fscanf(file, "%lf", &jump);
             }
             // Scanning the elements of the bloc on this line
-            for (int j = 0; j < Mpr; j++) {
+            for (int j = 0; j < *Mp; j++) {
                 fscanf(file, "%lf", &B[i * *Mp + j]);
             }
             // Go threw the columns after the bloc on this line
-            for (int l = (jp + 1) * *Mp; l < M; l++) {
+            for (int l = size_blocs_before(jp + 1, *M, P); l < *M; l++) {
                 fscanf(file, "%lf", &jump);
             }
         }
@@ -152,45 +158,42 @@ double *load_B_subpart(char * file_name, int *Kp, int *Mp, int ip, int jp, int P
     return NULL;
 }
 
-double *load_C_subpart(char * file_name, int *Npr, int *Mpr, int ip, int jp, int P) {
-    int N, K, M;
+double *mkl_load_C_subpart(char * file_name, int *Np, int *Mp, int *N, int *M, int ip, int jp, int P) {
+    int K;
     double jump;
     FILE *file = fopen(file_name, "r");
     if (file) {
-        fscanf(file, "%d", &N);
+        fscanf(file, "%d", N);
         fscanf(file, "%d", &K);
-        fscanf(file, "%d", &M);
-        int Np = N / P + (N % P == 0 ? 0 : 1);
-        int Mp = M / P + (M % P == 0 ? 0 : 1);
+        fscanf(file, "%d", M);
+        *Np = size_bloc(ip, *N, P);
+        *Mp = size_bloc(jp, *M, P);
 
-        *Npr = (ip == P - 1 && N % Np != 0) ? N % Np : Np;
-        *Mpr = (jp == P - 1 && M % Mp != 0) ? M % Mp : Mp;
-
-        double * C = mkl_malloc(*Npr * *Mpr * sizeof(double), 64);
+        double * C =  mkl_malloc(*Np * *Mp * sizeof(double), 64);
 
         // Go threw A
-        for (int i = 0; i < N * K; i++) {
+        for (int i = 0; i < *N * K; i++) {
             fscanf(file, "%lf", &jump);
         }
         // Go threw B
-        for (int i = 0; i < K * M; i++) {
+        for (int i = 0; i < K * *M; i++) {
             fscanf(file, "%lf", &jump);
         }
         // Go threw the lines before the bloc
-        for (int i = 0; i < ip * Np * M; i++) {
+        for (int i = 0; i < size_blocs_before(ip, *N, P) * *M; i++) {
             fscanf(file, "%lf", &jump);
         }
-        for (int i = 0; i < *Npr; i++) {
+        for (int i = 0; i < *Np; i++) {
             // Go threw the columns before the bloc on this line
-            for (int l = 0; l < jp * Mp; l++) {
+            for (int l = 0; l < size_blocs_before(jp, *M, P); l++) {
                 fscanf(file, "%lf", &jump);
             }
             // Scanning the elements of the bloc on this line
-            for (int j = 0; j < *Mpr; j++) {
-                fscanf(file, "%lf", &C[i * *Mpr + j]);
+            for (int j = 0; j < *Mp; j++) {
+                fscanf(file, "%lf", &C[i * *Mp + j]);
             }
             // Go threw the columns after the bloc on this line
-            for (int l = (jp + 1) * Mp; l < M; l++) {
+            for (int l = size_blocs_before(jp + 1, *M, P); l < *M; l++) {
                 fscanf(file, "%lf", &jump);
             }
         }
@@ -201,75 +204,51 @@ double *load_C_subpart(char * file_name, int *Npr, int *Mpr, int ip, int jp, int
 }
 
 
-double *load_A_subpart_1(int N, int K, int *Np, int *Kp, int ip, int jp, int P) {
-    *Np = N / P + (N % P == 0 ? 0 : 1);
-    *Kp = K / P + (K % P == 0 ? 0 : 1);
+double *mkl_load_A_subpart_1(int N, int K, int *Np, int *Kp, int ip, int jp, int P) {
+    *Np = size_bloc(ip, N, P);
+    *Kp = size_bloc(jp, K, P);
 
-    int Npr = (ip == P - 1 && N % *Np != 0) ? N % *Np : *Np;
-    int Kpr = (jp == P - 1 && K % *Kp != 0) ? K % *Kp : *Kp;
+    double *A = (double *)  mkl_malloc(size_bloc_alloc(N, P) * size_bloc_alloc(K, P) * sizeof(double), 64);
 
-    double *A = (double *) mkl_malloc(*Np * *Kp * sizeof(double), 64);
-
-    for (int i = 0; i < Npr; i++) {
-        for (int j = 0; j < Kpr; j++) {
-            A[i * *Kp + j] = 1;
-        }
+    for (int i = 0; i < *Np * *Kp; i++) {
+        A[i] = 1;
     }
-
     return A;
 }
 
-double *load_B_subpart_1(int K, int M, int *Kp, int *Mp, int ip, int jp, int P) {
-    *Kp = K / P + (K % P == 0 ? 0 : 1);
-    *Mp = M / P + (M % P == 0 ? 0 : 1);
+double *mkl_load_B_subpart_1(int K, int M, int *Kp, int *Mp, int ip, int jp, int P) {
+    *Kp = size_bloc(ip, K, P);
+    *Mp = size_bloc(jp, M, P);
 
-    int Kpr = (ip == P - 1 && K % *Kp != 0) ? K % *Kp : *Kp;
-    int Mpr = (jp == P - 1 && M % *Mp != 0) ? M % *Mp : *Mp;
+    double *B = (double *)  mkl_malloc(size_bloc_alloc(K, P) * size_bloc_alloc(M, P) * sizeof(double), 64);
 
-    double *B = (double *) mkl_malloc(*Kp * *Mp * sizeof(double), 64);
-
-    for (int i = 0; i < Kpr; i++) {
-        for (int j = 0; j < Mpr; j++) {
-            B[i * *Mp + j] = 1;
-        }
+    for (int i = 0; i < *Kp * *Mp; i++) {
+        B[i] = 1;
     }
-
     return B;
 }
 
-double *load_A_subpart_rand(int N, int K, int *Np, int *Kp, int ip, int jp, int P) {
-    *Np = N / P + (N % P == 0 ? 0 : 1);
-    *Kp = K / P + (K % P == 0 ? 0 : 1);
+double *mkl_load_A_subpart_rand(int N, int K, int *Np, int *Kp, int ip, int jp, int P) {
+    *Np = size_bloc(ip, N, P);
+    *Kp = size_bloc(jp, K, P);
 
-    int Npr = (ip == P - 1 && N % *Np != 0) ? N % *Np : *Np;
-    int Kpr = (jp == P - 1 && K % *Kp != 0) ? K % *Kp : *Kp;
+    double *A = (double *)  mkl_malloc(size_bloc_alloc(N, P) * size_bloc_alloc(K, P) * sizeof(double), 64);
 
-    double *A = (double *) mkl_malloc(*Np * *Kp * sizeof(double), 64);
-
-    for (int i = 0; i < Npr; i++) {
-        for (int j = 0; j < Kpr; j++) {
-            A[i * *Kp + j] = fRand();
-        }
+    for (int i = 0; i < *Np * *Kp; i++) {
+        A[i] = mkl_fRand();
     }
-
     return A;
 }
 
-double *load_B_subpart_rand(int K, int M, int *Kp, int *Mp, int ip, int jp, int P) {
-    *Kp = K / P + (K % P == 0 ? 0 : 1);
-    *Mp = M / P + (M % P == 0 ? 0 : 1);
+double *mkl_load_B_subpart_rand(int K, int M, int *Kp, int *Mp, int ip, int jp, int P) {
+    *Kp = size_bloc(ip, K, P);
+    *Mp = size_bloc(jp, M, P);
 
-    int Kpr = (ip == P - 1 && K % *Kp != 0) ? K % *Kp : *Kp;
-    int Mpr = (jp == P - 1 && M % *Mp != 0) ? M % *Mp : *Mp;
+    double *B = (double *)  mkl_malloc(size_bloc_alloc(K, P) * size_bloc_alloc(M, P) * sizeof(double), 64);
 
-    double *B = (double *) mkl_malloc(*Kp * *Mp * sizeof(double), 64);
-
-    for (int i = 0; i < Kpr; i++) {
-        for (int j = 0; j < Mpr; j++) {
-            B[i * *Mp + j] = fRand();
-        }
+    for (int i = 0; i < *Kp * *Mp; i++) {
+        B[i] = mkl_fRand();
     }
-
     return B;
 }
 

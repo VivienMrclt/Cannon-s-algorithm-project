@@ -79,6 +79,15 @@ double *load_C(char * file_name, int *N, int *M) {
     return NULL;
 }
 
+double *load_rand(int N, int M) {
+    double *A = (double *) calloc(N, M, sizeof(double));
+
+    for (int i = 0; i < N * M; i++) {
+        A[i] = fRand();
+    }
+    return A;
+}
+
 double *load_A_subpart(char * file_name, int *Np, int *Kp, int *N, int *K, int ip, int jp, int P) {
     int M;
     double jump;

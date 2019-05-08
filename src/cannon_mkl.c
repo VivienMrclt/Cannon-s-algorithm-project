@@ -4,8 +4,9 @@
 #include <math.h>
 #include <stdbool.h>
 #include <string.h>
-#include "load_matrix.h"
+#include "load_matrix_mkl.h"
 #include "utils.h"
+#include "mkl.h"
 #include <time.h>
 
 int main(int argc, char **argv)
@@ -49,6 +50,7 @@ int main(int argc, char **argv)
     double *B_tmp;
     double *C_res;
     double *C;
+    double *C_tmp;
     int Np, Kp, Mp;// Npr, Mpr;
 
     if (bd_gt || (!testfile && verify)) {
@@ -63,9 +65,9 @@ int main(int argc, char **argv)
         //In the of broadcast/gather we need to send the matrices
         if (p==0) {
             if (verify) {
-                A_all = (double *) calloc(N * K, sizeof(double));
-                B_all = (double *) calloc(K * M, sizeof(double));
-                C_all = (double *) calloc(N * M, sizeof(double));
+                A_all = (double *) mkl_malloc(N * K * sizeof(double), 64);
+                B_all = (double *) mkl_malloc(K * M * sizeof(double), 64);
+                C_all = (double *) mkl_malloc(N * M * sizeof(double), 64);
             }
 
             // We send the correct A and B matrices to all the other processes
@@ -77,29 +79,29 @@ int main(int argc, char **argv)
 
                 // Load the correct A and send it
                 double *dA;
-                dA = load_A_subpart_rand(N, K, &Ndp, &Kdp, idp, (idp + jdp) % P, P);
+                dA = mkl_load_A_subpart_rand(N, K, &Ndp, &Kdp, idp, (idp + jdp) % P, P);
                 if (verify) {
                     save_subpart(A_all, dA, N, K, idp, (idp + jdp) % P, P, true);
                 }
 
                 rc = MPI_Send(dA, Ndp*Kdp, MPI_DOUBLE, dp, tag, MPI_COMM_WORLD);
                 verb_sentA(verbose, ip, jp, idp, jdp);
-                free(dA);
+                mkl_free(dA);
 
                 // Load the correct B and send it
                 double *dB;
-                dB = load_B_subpart_rand(K, M, &Kdp, &Mdp, (idp + jdp) % P, jdp, P);
+                dB = mkl_load_B_subpart_rand(K, M, &Kdp, &Mdp, (idp + jdp) % P, jdp, P);
                 if (verify) {
                     save_subpart(B_all, dB, K, M, (idp + jdp) % P, jdp, P, true);
                 }
 
                 rc = MPI_Send(dB, Kdp*Mdp, MPI_DOUBLE, dp, tag, MPI_COMM_WORLD);
                 verb_sentB(verbose, ip, jp, idp, jdp);
-                free(dB);
+                mkl_free(dB);
             }
 
-            A = load_A_subpart_rand(N, K, &Np, &Kp, 0, 0, P);
-            B = load_A_subpart_rand(K, M, &Kp, &Mp, 0, 0, P);
+            A = mkl_load_A_subpart_rand(N, K, &Np, &Kp, 0, 0, P);
+            B = mkl_load_A_subpart_rand(K, M, &Kp, &Mp, 0, 0, P);
             if (verify) {
                 save_subpart(A_all, A, N, K, ip, jp, P, true);
                 save_subpart(B_all, B, K, M, ip, jp, P, true);
@@ -111,8 +113,8 @@ int main(int argc, char **argv)
             Kp = size_bloc((ip + jp) % P, K, P);
             Mp = size_bloc(jp, M, P);
 
-            A = (double *) calloc(size_bloc_alloc(N, P) * size_bloc_alloc(K, P), sizeof(double));
-            B = (double *) calloc(size_bloc_alloc(K, P) * size_bloc_alloc(M, P), sizeof(double));
+            A = (double *) mkl_malloc(size_bloc_alloc(N, P) * size_bloc_alloc(K, P) * sizeof(double), 64);
+            B = (double *) mkl_malloc(size_bloc_alloc(K, P) * size_bloc_alloc(M, P) * sizeof(double), 64);
 
             rc = MPI_Recv(A, Np*Kp, MPI_DOUBLE, 0, tag, MPI_COMM_WORLD, &status);
             rc = MPI_Recv(B, Kp*Mp, MPI_DOUBLE, 0, tag, MPI_COMM_WORLD, &status);
@@ -126,12 +128,12 @@ int main(int argc, char **argv)
         }
     } else {
         if (testfile) {
-            A = load_A_subpart(filename, &Np, &Kp, &N, &K, ip, (ip + jp) % P, P);
-            B = load_B_subpart(filename, &Kp, &Mp, &K, &M,(ip + jp) % P, jp, P);
-            C_res = load_C_subpart(filename, &Np, &Mp, &N, &M, ip, jp, P);
+            A = mkl_load_A_subpart(filename, &Np, &Kp, &N, &K, ip, (ip + jp) % P, P);
+            B = mkl_load_B_subpart(filename, &Kp, &Mp, &K, &M,(ip + jp) % P, jp, P);
+            C_res = mkl_load_C_subpart(filename, &Np, &Mp, &N, &M, ip, jp, P);
         } else {
-            A = load_A_subpart_rand(N, K, &Np, &Kp, ip, (ip + jp) % P, P);
-            B = load_A_subpart_rand(K, M, &Kp, &Mp,(ip + jp) % P, jp, P);
+            A = mkl_load_A_subpart_rand(N, K, &Np, &Kp, ip, (ip + jp) % P, P);
+            B = mkl_load_A_subpart_rand(K, M, &Kp, &Mp,(ip + jp) % P, jp, P);
         }
         verb_m_loaded(verbose, ip, jp);
         if (timing) {
@@ -143,17 +145,17 @@ int main(int argc, char **argv)
         }
     }
 
-    A_tmp = (double *) calloc(size_bloc_alloc(N, P) * size_bloc_alloc(K, P), sizeof(double));
-    B_tmp = (double *) calloc(size_bloc_alloc(K, P) * size_bloc_alloc(M, P), sizeof(double));
-    C = (double *) calloc(Np * Mp, sizeof(double));
+    A_tmp = (double *) mkl_malloc(size_bloc_alloc(N, P) * size_bloc_alloc(K, P) * sizeof(double), 64);
+    B_tmp = (double *) mkl_malloc(size_bloc_alloc(K, P) * size_bloc_alloc(M, P) * sizeof(double), 64);
+    C_tmp = (double *) mkl_malloc(size_bloc_alloc(N, P) * size_bloc_alloc(M, P) * sizeof(double), 64);
+    C = (double *) mkl_malloc(Np * Mp * sizeof(double), 64);
 
     for (int c = 0; c < P; c++) {
-        for (int i = 0; i < Np; i++) {
-            for (int k = 0; k < Kp; k++) {
-                for (int j = 0; j < Mp; j++) {
-                    C[i * Mp + j] += A[i * Kp + k] * B[k * Mp + j];
-                }
-            }
+
+        cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, Np, Mp, Kp, 1, A, Kp, B, Mp, 0, C_tmp, Mp);
+
+        for (int i = 0; i < Np * Mp; i++) {
+            C[i] += C_tmp[i];
         }
 
 
@@ -272,13 +274,13 @@ int main(int argc, char **argv)
                 int Ndp = size_bloc(idp, N, P);
                 int Mdp = size_bloc(jdp, M, P);
 
-                double *dC = (double *) calloc(Ndp * Mdp, sizeof(double));
+                double *dC = (double *) mkl_malloc(Ndp * Mdp * sizeof(double), 64);
                 rc = MPI_Recv(dC, Ndp * Mdp, MPI_DOUBLE, dp, tag, MPI_COMM_WORLD, &status);
 
                 if (verify) {
                     save_subpart(C_all, dC, N, M, idp, jdp, P, false);
                 }
-                free(dC);
+                mkl_free(dC);
             }
             if (verify) {
                 save_subpart(C_all, C, N, M, ip, jp, P, false);
@@ -347,17 +349,17 @@ int main(int argc, char **argv)
     }
 
     if (p == 0 && verify && !testfile) {
-        free(A_all);
-        free(B_all);
-        free(C_all);
+        mkl_free(A_all);
+        mkl_free(B_all);
+        mkl_free(C_all);
     }
-    free(A);
-    free(A_tmp);
-    free(B);
-    free(B_tmp);
-    free(C);
+    mkl_free(A);
+    mkl_free(A_tmp);
+    mkl_free(B);
+    mkl_free(B_tmp);
+    mkl_free(C);
     if (testfile) {
-        free(C_res);
+        mkl_free(C_res);
     }
     rc = MPI_Finalize();
     exit(0);

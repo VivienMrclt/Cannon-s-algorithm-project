@@ -1,4 +1,4 @@
-CC=mpicc #mpicc
+CC=mpicc #mpiicc
 
 CFLAGS=-W -Wall -std=c99 -g
 LDFLAGS= -lm -g
@@ -14,10 +14,10 @@ all: $(EXEC)
 mkl: obj/load_matrix.o $(EXEC_MKL)
 
 %: obj/%.o obj/strassen.o obj/load_matrix.o obj/utils.o
-	$(CC) -o $@ $^ $(LDFLAGS)
+	$(CC) -o $@ $^ $(LDFLAGS) $(OPT)
 
 obj/%.o: src/%.c
-	$(CC) -o $@ -c $< $(CFLAGS)
+	$(CC) -o $@ -c $< $(CFLAGS) $(OPT)
 
 .PHONY: clean mrproper
 
@@ -29,7 +29,6 @@ mrproper: clean
 
 sendPDC:
 	scp $(PDC_PARAM) src/* $(PDC_ID)@tegner.pdc.kth.se:~/Private/cannon/src
-	scp $(PDC_PARAM) Makefile $(PDC_ID)@tegner.pdc.kth.se:~/Private/cannon/
 	scp $(PDC_PARAM) job.sh $(PDC_ID)@tegner.pdc.kth.se:~/Private/cannon/
 
 connectPDC:
